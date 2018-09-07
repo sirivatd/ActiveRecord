@@ -8,15 +8,25 @@ class SQLObject
   def self.columns
     # ...
     return @columns if @columns
-    cols = DBConnection.execute(<<-SQL)
+    cols = DBConnection.execute2(<<-SQL).first
       SELECT *
       FROM #{self.table_name}
       LIMIT 0
     SQL
+    cols.map!(&:to_sym)
     @columns = cols
   end
 
   def self.finalize!
+    self.columns.each do |col|
+      define_method(col) do
+        self.attributes[col]
+      end
+
+      define_method("#{col}=") do |value|
+        self.attributes[col] = value
+      end
+    end
   end
 
   def self.table_name=(table_name)
@@ -26,9 +36,7 @@ class SQLObject
 
   def self.table_name
     # ...
-    @table_name = self.name.tableize
-    @table_name =  'humans' if @table_name = 'humen'
-    @table_name
+    @table_name || self.name.underscore.pluralize
   end
 
   def self.all
@@ -50,10 +58,11 @@ class SQLObject
 
   def attributes
     # ...
+    @attributes ||= {}
   end
 
   def attribute_values
-    # ...
+    self.class.columns.map { |attr| self.send(attr) }
   end
 
   def insert
